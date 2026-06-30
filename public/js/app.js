@@ -1,4 +1,5 @@
 import { api, fmtDate, fmtNum, escapeHtml, exportCsv } from './api.js';
+import { participantPickerHtml, mountParticipantPicker } from './participant-picker.js';
 
 let currentUser = null;
 let currentGroup = null;
@@ -175,14 +176,18 @@ async function renderTreasures(el) {
       <table class="data-table">
         <thead><tr>
           <th>狀態</th><th>單號</th><th>BOSS</th><th>取得時間</th><th>寶物名稱</th>
-          <th>持有人</th><th>參與人員</th><th>帶團者</th><th>入帳金額</th><th>申請時間</th><th></th>
+          <th>持有人</th><th>參與人員</th><th>是否有參加</th><th>帶團者</th><th>入帳金額</th><th>申請時間</th><th></th>
         </tr></thead>
         <tbody>${treasures
           .map(
-            (t) => `<tr>
+            (t) => {
+              const joined = (t.participants || []).includes(currentUser.account);
+              return `<tr>
               <td>${escapeHtml(t.status)}</td><td>${escapeHtml(t.serial)}</td><td>${escapeHtml(t.boss)}</td>
               <td>${fmtDate(t.obtainedAt)}</td><td>${escapeHtml(t.itemName)}</td><td>${escapeHtml(t.holder)}</td>
-              <td>${(t.participants || []).join(', ')}</td><td>${escapeHtml(t.leader)}</td>
+              <td>${(t.participants || []).join(', ')}</td>
+              <td>${joined ? '<span style="color:var(--success);font-weight:600">是</span>' : '否'}</td>
+              <td>${escapeHtml(t.leader)}</td>
               <td>${t.creditTotal ? fmtNum(t.creditTotal) : '-'}</td>
               <td>${fmtDate(t.appliedAt)}</td>
               <td>
@@ -192,7 +197,8 @@ async function renderTreasures(el) {
                 ${t.status === '已入帳' && isSuperAdmin() ? `<button class="btn danger btn-sm" data-del-treasure="${t.id}" data-credited="1">刪除</button> ` : ''}
                 ${t.status === '已入帳' ? `<button class="btn btn-sm" data-detail="${t.id}">明細</button>` : ''}
               </td>
-            </tr>`
+            </tr>`;
+            }
           )
           .join('')}</tbody>
       </table>
@@ -206,7 +212,7 @@ async function renderTreasures(el) {
         <label>持有人<input name="holder" type="text" value="${escapeHtml(currentUser.account)}" placeholder="直接輸入持有人" /></label>
         <label>帶團者<input name="leader" type="text" value="${escapeHtml(currentUser.account)}" placeholder="直接輸入帶團者" /></label>
         <label>取得時間<input name="obtainedAt" type="datetime-local" /></label>
-        <label>參與人員<input name="participants" type="text" placeholder="逗號分隔" value="${escapeHtml(currentUser.account)}" /></label>
+        ${participantPickerHtml('參與人員')}
         <div style="grid-column:1/-1"><button class="btn primary">提交申報</button></div>
       </form>
     </div>
@@ -253,10 +259,8 @@ async function renderTreasures(el) {
         <div class="card-title">編輯參與人員</div>
         <p id="editParticipantsInfo" class="muted"></p>
         <form id="editParticipantsForm">
-          <label class="field-label">參與人員
-            <input name="participants" type="text" required placeholder="逗號分隔，例如：極致, 蕾蕾" />
-          </label>
-          <p class="muted" style="font-size:0.8rem;margin-top:0.35rem">僅「待入帳」狀態可修改，入帳後將鎖定。</p>
+          ${participantPickerHtml('參與人員')}
+          <p class="muted" style="font-size:0.8rem;margin-top:0.35rem">搜尋帳號後點選加入；已選人員會以標籤顯示，不會重複。僅「待入帳」狀態可修改。</p>
           <div class="toolbar" style="margin-top:1rem">
             <button type="button" class="btn ghost" id="editParticipantsCancel">取消</button>
             <button type="submit" class="btn primary">儲存</button>
@@ -267,6 +271,14 @@ async function renderTreasures(el) {
 
   const treasureMap = Object.fromEntries(treasures.map((t) => [t.id, t]));
   let creditTreasure = null;
+
+  const treasureParticipantPicker = mountParticipantPicker(
+    document.querySelector('#treasureForm .participant-picker'),
+    { initial: [currentUser.account] }
+  );
+  const editParticipantPicker = mountParticipantPicker(
+    document.querySelector('#editParticipantsForm .participant-picker')
+  );
 
   function calcCredit() {
     const total = Number(document.getElementById('creditTotal').value) || 0;
@@ -363,8 +375,18 @@ async function renderTreasures(el) {
     document.getElementById('creditModal').classList.remove('hidden');
   }
 
-  document.getElementById('addTreasure').onclick = () =>
-    document.getElementById('treasureModal').classList.toggle('hidden');
+  document.getElementById('addTreasure').onclick = () => {
+    const modal = document.getElementById('treasureModal');
+    const opening = modal.classList.contains('hidden');
+    modal.classList.toggle('hidden');
+    if (opening) {
+      const form = document.getElementById('treasureForm');
+      form.reset();
+      form.holder.value = currentUser.account;
+      form.leader.value = currentUser.account;
+      treasureParticipantPicker?.setSelected([currentUser.account]);
+    }
+  };
   document.getElementById('exportTreasures').onclick = () =>
     exportCsv('treasures.csv', treasures, ['serial', 'status', 'boss', 'itemName', 'holder', 'creditTotal', 'obtainedAt']);
 
@@ -415,7 +437,11 @@ async function renderTreasures(el) {
     e.preventDefault();
     const fd = new FormData(e.target);
     const body = Object.fromEntries(fd);
-    body.participants = (body.participants || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+    body.participants = treasureParticipantPicker?.getSelected() || [];
+    if (!body.participants.length) {
+      alert('至少需要一位參與人員');
+      return;
+    }
     await api('/api/treasures', { method: 'POST', body: JSON.stringify(body) });
     route();
   };
@@ -455,8 +481,7 @@ async function renderTreasures(el) {
     editParticipantsTreasure = t;
     document.getElementById('editParticipantsInfo').textContent =
       `${t.serial} · ${t.itemName} · 持有人：${t.holder}`;
-    const form = document.getElementById('editParticipantsForm');
-    form.participants.value = (t.participants || []).join(', ');
+    editParticipantPicker?.setSelected(t.participants || []);
     document.getElementById('editParticipantsModal').classList.remove('hidden');
   }
 
@@ -468,11 +493,7 @@ async function renderTreasures(el) {
   document.getElementById('editParticipantsForm').onsubmit = async (e) => {
     e.preventDefault();
     if (!editParticipantsTreasure) return;
-    const fd = new FormData(e.target);
-    const participants = String(fd.get('participants') || '')
-      .split(/[,，]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const participants = editParticipantPicker?.getSelected() || [];
     if (!participants.length) {
       alert('至少需要一位參與人員');
       return;

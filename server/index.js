@@ -949,6 +949,17 @@ async function handleApi(req, res) {
   }
 
   // Users (admin)
+  if (pathname === '/api/users/accounts' && method === 'GET') {
+    const user = requireAuth(req, res);
+    if (!user) return;
+    const q = (url.searchParams.get('q') || '').trim().toLowerCase();
+    const accounts = readStore()
+      .users.map((u) => u.account)
+      .filter((a) => !q || a.toLowerCase().includes(q))
+      .slice(0, 30);
+    return sendJson(res, 200, accounts);
+  }
+
   if (pathname === '/api/users' && method === 'GET') {
     const user = requirePerm(req, res, 'users.view');
     if (!user) return;
