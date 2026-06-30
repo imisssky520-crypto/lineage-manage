@@ -26,6 +26,10 @@ function isAdmin() {
   return currentUser?.role === 'super_admin' || currentUser?.role === 'admin';
 }
 
+function isSuperAdmin() {
+  return currentUser?.role === 'super_admin';
+}
+
 const ROLE_LABELS = {
   super_admin: '最高管理員',
   admin: '管理員',
@@ -185,6 +189,7 @@ async function renderTreasures(el) {
                 ${t.status === '待入帳' && canEditParticipants(t) ? `<button class="btn btn-sm" data-edit-participants="${t.id}">編輯參與</button> ` : ''}
                 ${t.status === '待入帳' && isAdmin() ? `<button class="btn primary btn-sm" data-credit="${t.id}">入帳</button> ` : ''}
                 ${t.status === '待入帳' && isAdmin() ? `<button class="btn danger btn-sm" data-del-treasure="${t.id}">刪除</button> ` : ''}
+                ${t.status === '已入帳' && isSuperAdmin() ? `<button class="btn danger btn-sm" data-del-treasure="${t.id}" data-credited="1">刪除</button> ` : ''}
                 ${t.status === '已入帳' ? `<button class="btn btn-sm" data-detail="${t.id}">明細</button>` : ''}
               </td>
             </tr>`
@@ -425,7 +430,11 @@ async function renderTreasures(el) {
     btn.onclick = async () => {
       const t = treasureMap[btn.dataset.delTreasure];
       if (!t) return;
-      if (!confirm(`確定刪除寶物申報「${t.serial} · ${t.itemName}」？`)) return;
+      const credited = btn.dataset.credited === '1';
+      const msg = credited
+        ? `確定刪除已入帳寶物「${t.serial} · ${t.itemName}」？\n此操作會撤銷盟友入帳金額與各項抽成，且無法復原。`
+        : `確定刪除寶物申報「${t.serial} · ${t.itemName}」？`;
+      if (!confirm(msg)) return;
       try {
         await api('/api/treasures/' + t.id, { method: 'DELETE' });
         route();
@@ -1003,6 +1012,13 @@ async function renderUsers(el) {
           <input type="file" id="uploadRestore" accept=".json,application/json" hidden />
         </label>
       </div>
+    </div>
+    <div class="card" style="margin-top:1rem;border-color:var(--danger)">
+      <div class="card-title">⚠️ 一鍵清零資料</div>
+      <p class="muted">清除寶物、銀行、提領、公告、儲值、公積金／抽成餘額等營運資料。<strong>成員帳號（帳號、密碼、權限、血盟、職業）會完整保留。</strong></p>
+      <div class="toolbar">
+        <button type="button" class="btn danger" id="clearAllData">一鍵清零資料</button>
+      </div>
     </div>`
         : ''
     }
@@ -1091,6 +1107,34 @@ async function renderUsers(el) {
         alert(err.message || '還原失敗');
       }
       e.target.value = '';
+    };
+  }
+
+  const clearAllData = document.getElementById('clearAllData');
+  if (clearAllData) {
+    clearAllData.onclick = async () => {
+      if (
+        !confirm(
+          '確定要清零所有營運資料？\n\n將清除：寶物申報、銀行紀錄、提領、公告、儲值、公積金／抽成餘額等。\n成員帳號會保留。\n\n此操作無法復原，建議先下載備份。'
+        )
+      ) {
+        return;
+      }
+      const typed = prompt('請輸入「清零」以確認執行：');
+      if (typed !== '清零') {
+        if (typed !== null) alert('確認文字不正確，已取消');
+        return;
+      }
+      try {
+        const result = await api('/api/admin/clear-data', {
+          method: 'POST',
+          body: JSON.stringify({ confirm: 'CLEAR_ALL_DATA' })
+        });
+        alert(`${result.message}\n保留 ${result.usersKept} 位成員帳號`);
+        location.reload();
+      } catch (err) {
+        alert(err.message || '清零失敗');
+      }
     };
   }
 

@@ -83,6 +83,18 @@ function ensureGuildSettings(store) {
   return gs;
 }
 
+function reverseTreasureCredit(store, t) {
+  ensureGuildSettings(store);
+  const ref = `#${t.serial}`;
+  store.bankTransactions = (store.bankTransactions || []).filter(
+    (tx) => tx.treasureId !== t.id && !(tx.type === '寶物收入' && tx.ref === ref)
+  );
+  const gs = store.guildSettings;
+  gs.fundBalance -= t.guildFundAmount || 0;
+  gs.secretaryBalance -= t.secretaryAmount || 0;
+  gs.crossSecretaryBalance -= t.crossSecretaryAmount || 0;
+}
+
 function getPendingWithdrawTotal(store, userId) {
   return (store.withdrawRequests || [])
     .filter((r) => r.userId === userId && r.status === '待審核')
@@ -188,6 +200,15 @@ function mergeStoreData(incoming) {
     notifications: incoming.notifications || [],
     favoriteLists: incoming.favoriteLists || [],
     sessions: incoming.sessions || {}
+  };
+}
+
+function buildClearedStore(store) {
+  return {
+    ...DEFAULT_STORE,
+    users: store.users,
+    sessions: store.sessions || {},
+    groups: store.groups || []
   };
 }
 
@@ -521,7 +542,7 @@ async function handleApi(req, res) {
   }
 
   if (pathname.match(/^\/api\/treasures\/[^/]+$/) && method === 'DELETE') {
-    const user = requirePerm(req, res, 'treasures.manage');
+    const user = requireAuth(req, res);
     if (!user) return;
     const id = pathname.split('/')[3];
     let deleteError = null;
@@ -531,13 +552,24 @@ async function handleApi(req, res) {
         deleteError = '找不到寶物';
         return;
       }
-      if (t.status !== '待入帳') {
-        deleteError = '僅待入帳的寶物可刪除';
+      if (t.status === '待入帳') {
+        if (!hasPermission(user, 'treasures.manage')) {
+          deleteError = '僅管理員可刪除';
+          return;
+        }
+      } else if (t.status === '已入帳') {
+        if (user.role !== 'super_admin') {
+          deleteError = '僅最高管理員可刪除已入帳寶物';
+          return;
+        }
+        reverseTreasureCredit(store, t);
+      } else {
+        deleteError = '此狀態的寶物不可刪除';
         return;
       }
       store.treasures = store.treasures.filter((x) => x.id !== id);
     });
-    if (deleteError) return sendJson(res, 400, { error: deleteError });
+    if (deleteError) return sendJson(res, deleteError.includes('僅') ? 403 : 400, { error: deleteError });
     return sendJson(res, 200, { ok: true });
   }
 
@@ -1132,6 +1164,25 @@ async function handleApi(req, res) {
       message: '資料已還原',
       restoredAt: new Date().toISOString(),
       restoredBy: user.account
+    });
+  }
+
+  if (pathname === '/api/admin/clear-data' && method === 'POST') {
+    const user = requireSuperAdmin(req, res);
+    if (!user) return;
+    const body = await parseBody(req);
+    if (body.confirm !== 'CLEAR_ALL_DATA') {
+      return sendJson(res, 400, { error: '確認碼不正確' });
+    }
+    const store = readStore();
+    const usersKept = store.users.length;
+    writeStore(buildClearedStore(store));
+    return sendJson(res, 200, {
+      ok: true,
+      message: '已清零營運資料，成員帳號已保留',
+      clearedAt: new Date().toISOString(),
+      clearedBy: user.account,
+      usersKept
     });
   }
 
