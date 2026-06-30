@@ -36,7 +36,17 @@ const store = {
   withdrawRequests: [],
   dkpRecords: [],
   dkpSettings: { defaultPoints: 0, eventPoints: 10 },
-  guildSettings: { fundPercent: 10, fundBalance: 0, adjustHistory: [] },
+  guildSettings: {
+    fundPercent: 10,
+    fundBalance: 0,
+    adjustHistory: [],
+    secretaryPercent: 0,
+    secretaryBalance: 0,
+    secretaryAdjustHistory: [],
+    crossSecretaryPercent: 0,
+    crossSecretaryBalance: 0,
+    crossSecretaryAdjustHistory: []
+  },
   depositAccounts: [],
   depositPermissions: existing.depositPermissions?.length
     ? existing.depositPermissions

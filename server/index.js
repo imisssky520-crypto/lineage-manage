@@ -2,7 +2,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { readStore, updateStore, generateSerial } from './db.js';
+import { readStore, updateStore, generateSerial, writeStore, DEFAULT_STORE, PRODUCTION_FILE } from './db.js';
 import {
   verifyPassword,
   createSession,
@@ -60,12 +60,27 @@ function getUserBalance(store, userId) {
 
 function ensureGuildSettings(store) {
   if (!store.guildSettings) {
-    store.guildSettings = { fundPercent: 10, fundBalance: 0, adjustHistory: [] };
+    store.guildSettings = {
+      fundPercent: 10,
+      fundBalance: 0,
+      adjustHistory: [],
+      secretaryPercent: 0,
+      secretaryBalance: 0,
+      secretaryAdjustHistory: [],
+      crossSecretaryPercent: 0,
+      crossSecretaryBalance: 0,
+      crossSecretaryAdjustHistory: []
+    };
   }
-  if (!store.guildSettings.adjustHistory) {
-    store.guildSettings.adjustHistory = [];
-  }
-  return store.guildSettings;
+  const gs = store.guildSettings;
+  if (!gs.adjustHistory) gs.adjustHistory = [];
+  if (gs.secretaryPercent === undefined) gs.secretaryPercent = 0;
+  if (gs.secretaryBalance === undefined) gs.secretaryBalance = 0;
+  if (!gs.secretaryAdjustHistory) gs.secretaryAdjustHistory = [];
+  if (gs.crossSecretaryPercent === undefined) gs.crossSecretaryPercent = 0;
+  if (gs.crossSecretaryBalance === undefined) gs.crossSecretaryBalance = 0;
+  if (!gs.crossSecretaryAdjustHistory) gs.crossSecretaryAdjustHistory = [];
+  return gs;
 }
 
 function getPendingWithdrawTotal(store, userId) {
@@ -139,6 +154,41 @@ function requireAuth(req, res) {
     return null;
   }
   return user;
+}
+
+function requireSuperAdmin(req, res) {
+  const user = requireAuth(req, res);
+  if (!user) return null;
+  if (user.role !== 'super_admin') {
+    sendJson(res, 403, { error: '僅最高管理員可操作' });
+    return null;
+  }
+  return user;
+}
+
+function mergeStoreData(incoming) {
+  if (!incoming || typeof incoming !== 'object' || !Array.isArray(incoming.users)) {
+    return null;
+  }
+  return {
+    ...DEFAULT_STORE,
+    ...incoming,
+    groups: incoming.groups || DEFAULT_STORE.groups,
+    users: incoming.users,
+    announcements: incoming.announcements || [],
+    events: incoming.events || [],
+    treasures: incoming.treasures || [],
+    bankTransactions: incoming.bankTransactions || [],
+    withdrawRequests: incoming.withdrawRequests || [],
+    dkpRecords: incoming.dkpRecords || [],
+    dkpSettings: { ...DEFAULT_STORE.dkpSettings, ...(incoming.dkpSettings || {}) },
+    guildSettings: { ...DEFAULT_STORE.guildSettings, ...(incoming.guildSettings || {}) },
+    depositAccounts: incoming.depositAccounts || [],
+    depositPermissions: incoming.depositPermissions || [],
+    notifications: incoming.notifications || [],
+    favoriteLists: incoming.favoriteLists || [],
+    sessions: incoming.sessions || {}
+  };
 }
 
 function requirePerm(req, res, permission) {
@@ -328,8 +378,16 @@ async function handleApi(req, res) {
       }
 
       const percent = Number(store.guildSettings.fundPercent) || 0;
+      const secretaryPercent = Number(store.guildSettings.secretaryPercent) || 0;
+      const crossSecretaryPercent = Number(store.guildSettings.crossSecretaryPercent) || 0;
+      const applyCrossSecretary = !!body.applyCrossSecretary;
+
       const guildFundAmount = Math.round(totalAmount * percent / 100);
-      const distributable = totalAmount - guildFundAmount;
+      const secretaryAmount = Math.round(totalAmount * secretaryPercent / 100);
+      const crossSecretaryAmount = applyCrossSecretary
+        ? Math.round(totalAmount * crossSecretaryPercent / 100)
+        : 0;
+      const distributable = totalAmount - guildFundAmount - secretaryAmount - crossSecretaryAmount;
 
       const normalized = distributions.map((d) => ({
         account: String(d.account || '').trim(),
@@ -350,7 +408,7 @@ async function handleApi(req, res) {
 
       const distSum = normalized.reduce((s, d) => s + d.amount, 0);
       if (distSum !== distributable) {
-        creditError = `盟友分配總額 ${distSum} 需等於可分配餘額 ${distributable}（總額 ${totalAmount} − 公積金 ${guildFundAmount}）`;
+        creditError = `盟友分配總額 ${distSum} 需等於可分配餘額 ${distributable}（總額 ${totalAmount} − 公積金 ${guildFundAmount} − 秘書 ${secretaryAmount}${applyCrossSecretary ? ` − 跨服秘書 ${crossSecretaryAmount}` : ''}）`;
         return;
       }
 
@@ -371,6 +429,8 @@ async function handleApi(req, res) {
       });
 
       store.guildSettings.fundBalance += guildFundAmount;
+      store.guildSettings.secretaryBalance += secretaryAmount;
+      store.guildSettings.crossSecretaryBalance += crossSecretaryAmount;
 
       store.treasures[idx] = {
         ...t,
@@ -378,6 +438,11 @@ async function handleApi(req, res) {
         creditTotal: totalAmount,
         guildFundAmount,
         guildFundPercent: percent,
+        secretaryAmount,
+        secretaryPercent,
+        applyCrossSecretary,
+        crossSecretaryAmount,
+        crossSecretaryPercent: applyCrossSecretary ? crossSecretaryPercent : 0,
         distributions: normalized,
         creditedAt: ts,
         creditedBy: user.account
@@ -491,10 +556,14 @@ async function handleApi(req, res) {
     const body = await parseBody(req);
     updateStore((store) => {
       ensureGuildSettings(store);
-      const pct = Number(body.fundPercent);
-      if (!Number.isNaN(pct) && pct >= 0 && pct <= 100) {
-        store.guildSettings.fundPercent = pct;
-      }
+      const gs = store.guildSettings;
+      const pctFields = ['fundPercent', 'secretaryPercent', 'crossSecretaryPercent'];
+      pctFields.forEach((key) => {
+        const pct = Number(body[key]);
+        if (!Number.isNaN(pct) && pct >= 0 && pct <= 100) {
+          gs[key] = pct;
+        }
+      });
     });
     return sendJson(res, 200, readStore().guildSettings);
   }
@@ -506,12 +575,25 @@ async function handleApi(req, res) {
     const amount = Number(body.amount);
     if (Number.isNaN(amount)) return sendJson(res, 400, { error: '金額無效' });
 
+    const target = body.target || 'fund';
+    const fundConfig = {
+      fund: { balanceKey: 'fundBalance', historyKey: 'adjustHistory', label: '公積金' },
+      secretary: { balanceKey: 'secretaryBalance', historyKey: 'secretaryAdjustHistory', label: '秘書抽成' },
+      crossSecretary: {
+        balanceKey: 'crossSecretaryBalance',
+        historyKey: 'crossSecretaryAdjustHistory',
+        label: '跨服秘書抽成'
+      }
+    };
+    const cfg = fundConfig[target];
+    if (!cfg) return sendJson(res, 400, { error: '無效的調整目標' });
+
     let result;
     let adjustError = null;
     updateStore((store) => {
       ensureGuildSettings(store);
       const gs = store.guildSettings;
-      const before = gs.fundBalance;
+      const before = gs[cfg.balanceKey];
       let after;
       let delta;
 
@@ -531,9 +613,10 @@ async function handleApi(req, res) {
         delta = amount;
       }
 
-      gs.fundBalance = after;
-      gs.adjustHistory.unshift({
-        id: 'fa' + Date.now(),
+      gs[cfg.balanceKey] = after;
+      gs[cfg.historyKey].unshift({
+        id: 'fa' + Date.now() + target,
+        target,
         mode: body.mode || 'adjust',
         delta,
         balanceBefore: before,
@@ -542,7 +625,7 @@ async function handleApi(req, res) {
         by: user.account,
         createdAt: new Date().toISOString()
       });
-      if (gs.adjustHistory.length > 100) gs.adjustHistory.length = 100;
+      if (gs[cfg.historyKey].length > 100) gs[cfg.historyKey].length = 100;
       result = { ...gs };
     });
 
@@ -568,12 +651,17 @@ async function handleApi(req, res) {
       .sort((a, b) => b.balance - a.balance || a.account.localeCompare(b.account, 'zh-Hant'));
     const memberTotal = accounts.reduce((s, a) => s + a.balance, 0);
     const depositTotal = store.depositAccounts.reduce((s, a) => s + a.balance, 0);
+    const gs = store.guildSettings;
+    const poolTotal = gs.fundBalance + gs.secretaryBalance + gs.crossSecretaryBalance;
     return sendJson(res, 200, {
       accounts,
       memberTotal,
       depositTotal,
-      guildFundBalance: store.guildSettings.fundBalance,
-      grandTotal: memberTotal + store.guildSettings.fundBalance + depositTotal,
+      guildFundBalance: gs.fundBalance,
+      secretaryBalance: gs.secretaryBalance,
+      crossSecretaryBalance: gs.crossSecretaryBalance,
+      poolTotal,
+      grandTotal: memberTotal + poolTotal + depositTotal,
       count: accounts.length
     });
   }
@@ -1020,6 +1108,33 @@ async function handleApi(req, res) {
     return sendJson(res, 200, { pendingCredit: pending, count: pending.length });
   }
 
+  // Data backup / restore (super_admin only)
+  if (pathname === '/api/admin/backup' && method === 'GET') {
+    const user = requireSuperAdmin(req, res);
+    if (!user) return;
+    const store = readStore();
+    return sendJson(res, 200, {
+      exportedAt: new Date().toISOString(),
+      exportedBy: user.account,
+      store
+    });
+  }
+
+  if (pathname === '/api/admin/restore' && method === 'POST') {
+    const user = requireSuperAdmin(req, res);
+    if (!user) return;
+    const body = await parseBody(req);
+    const merged = mergeStoreData(body.store || body);
+    if (!merged) return sendJson(res, 400, { error: '備份格式無效' });
+    writeStore(merged);
+    return sendJson(res, 200, {
+      ok: true,
+      message: '資料已還原',
+      restoredAt: new Date().toISOString(),
+      restoredBy: user.account
+    });
+  }
+
   sendJson(res, 404, { error: 'API not found' });
 }
 
@@ -1040,7 +1155,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-// Auto seed if no data
+// 啟動時載入資料（重新部署後從 store.production.json 自動還原）
 const dataFile = path.join(__dirname, 'data', 'store.json');
 if (!fs.existsSync(PUBLIC)) {
   console.error('❌ 找不到 public 目錄：', PUBLIC);
@@ -1051,7 +1166,15 @@ if (!fs.existsSync(path.join(PUBLIC, 'login.html'))) {
   process.exit(1);
 }
 if (!fs.existsSync(dataFile)) {
-  await import('./seed.js');
+  if (fs.existsSync(PRODUCTION_FILE)) {
+    const dataDir = path.dirname(dataFile);
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    fs.copyFileSync(PRODUCTION_FILE, dataFile);
+    console.log('✅ 已從 store.production.json 還原資料（部署自動載入）');
+  } else {
+    await import('./seed.js');
+    console.log('ℹ️  無資料快照，已建立預設初始資料');
+  }
 }
 
 server.listen(PORT, '0.0.0.0', () => {

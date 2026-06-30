@@ -17,7 +17,7 @@ const ADMIN_NAV = [
   { id: 'withdraw-review', label: '📝 提領審核', admin: true },
   { id: 'deposits', label: '💎 儲值', admin: true },
   { id: 'deposit-perms', label: '🔑 儲值權限', admin: true },
-  { id: 'guild-settings', label: '🏛️ 公積金設定', admin: true },
+  { id: 'guild-settings', label: '🏛️ 抽成設定', admin: true },
   { id: 'users', label: '👥 成員管理', admin: true },
   { id: 'announce', label: '📢 公告管理', admin: true }
 ];
@@ -165,7 +165,7 @@ async function renderTreasures(el) {
     <div class="toolbar">
       <button class="btn primary" id="addTreasure">新增</button>
       <button class="btn" id="exportTreasures">匯出</button>
-      <span class="muted">公積金抽成：${guildSettings.fundPercent}%</span>
+      <span class="muted">公積金 ${guildSettings.fundPercent}% · 秘書 ${guildSettings.secretaryPercent ?? 0}% · 跨服秘書 ${guildSettings.crossSecretaryPercent ?? 0}%</span>
     </div>
     <div class="card" style="padding:0;overflow:auto">
       <table class="data-table">
@@ -214,6 +214,13 @@ async function renderTreasures(el) {
           <div class="credit-summary">
             <div>公積金抽成 <strong id="creditPercent">${guildSettings.fundPercent}</strong>%</div>
             <div>公積金：<strong id="creditGuild">${fmtNum(0)}</strong></div>
+            <div>秘書抽成 <strong id="creditSecretaryPercent">${guildSettings.secretaryPercent ?? 0}</strong>%</div>
+            <div>秘書：<strong id="creditSecretary">${fmtNum(0)}</strong></div>
+            <label class="checkbox-row" style="margin:0.5rem 0">
+              <input type="checkbox" id="applyCrossSecretary" />
+              跨服秘書抽成 <strong id="creditCrossPercent">${guildSettings.crossSecretaryPercent ?? 0}</strong>%
+            </label>
+            <div id="creditCrossRow" class="hidden">跨服秘書：<strong id="creditCross">${fmtNum(0)}</strong></div>
             <div>可分配給盟友：<strong id="creditRemain">${fmtNum(0)}</strong></div>
           </div>
           <div class="card-title" style="margin-top:1rem">盟友分配</div>
@@ -258,14 +265,22 @@ async function renderTreasures(el) {
 
   function calcCredit() {
     const total = Number(document.getElementById('creditTotal').value) || 0;
-    const pct = Number(document.getElementById('creditPercent').textContent) || 0;
-    const guild = Math.round(total * pct / 100);
-    const remain = total - guild;
+    const guildPct = Number(document.getElementById('creditPercent').textContent) || 0;
+    const secPct = Number(document.getElementById('creditSecretaryPercent').textContent) || 0;
+    const crossPct = Number(document.getElementById('creditCrossPercent').textContent) || 0;
+    const applyCross = document.getElementById('applyCrossSecretary').checked;
+    const guild = Math.round(total * guildPct / 100);
+    const secretary = Math.round(total * secPct / 100);
+    const cross = applyCross ? Math.round(total * crossPct / 100) : 0;
+    const remain = total - guild - secretary - cross;
     document.getElementById('creditGuild').textContent = fmtNum(guild);
+    document.getElementById('creditSecretary').textContent = fmtNum(secretary);
+    document.getElementById('creditCross').textContent = fmtNum(cross);
+    document.getElementById('creditCrossRow').classList.toggle('hidden', !applyCross);
     document.getElementById('creditRemain').textContent = fmtNum(remain);
     document.getElementById('creditTarget').textContent = fmtNum(remain);
     updateAssigned();
-    return { total, guild, remain };
+    return { total, guild, secretary, cross, remain, applyCross };
   }
 
   function updateAssigned() {
@@ -313,6 +328,12 @@ async function renderTreasures(el) {
         <tbody>
           <tr><td class="muted" style="width:120px">入帳總額</td><td><strong>${fmtNum(t.creditTotal)}</strong></td></tr>
           <tr><td class="muted">公積金 (${t.guildFundPercent ?? '-'}%)</td><td>${fmtNum(t.guildFundAmount ?? 0)}</td></tr>
+          <tr><td class="muted">秘書抽成 (${t.secretaryPercent ?? '-'}%)</td><td>${fmtNum(t.secretaryAmount ?? 0)}</td></tr>
+          ${
+            t.applyCrossSecretary
+              ? `<tr><td class="muted">跨服秘書 (${t.crossSecretaryPercent ?? '-'}%)</td><td>${fmtNum(t.crossSecretaryAmount ?? 0)}</td></tr>`
+              : ''
+          }
           <tr><td class="muted">入帳人</td><td>${escapeHtml(t.creditedBy || '-')}</td></tr>
           <tr><td class="muted">入帳時間</td><td>${fmtDate(t.creditedAt)}</td></tr>
         </tbody>
@@ -331,6 +352,7 @@ async function renderTreasures(el) {
     document.getElementById('creditInfo').textContent =
       `${t.serial} · ${t.itemName} · 參與：${(t.participants || []).join(', ')}`;
     document.getElementById('creditTotal').value = '';
+    document.getElementById('applyCrossSecretary').checked = false;
     buildCreditRows(t.participants?.length ? t.participants : [t.holder]);
     calcCredit();
     document.getElementById('creditModal').classList.remove('hidden');
@@ -342,6 +364,7 @@ async function renderTreasures(el) {
     exportCsv('treasures.csv', treasures, ['serial', 'status', 'boss', 'itemName', 'holder', 'creditTotal', 'obtainedAt']);
 
   document.getElementById('creditTotal').addEventListener('input', calcCredit);
+  document.getElementById('applyCrossSecretary').addEventListener('change', calcCredit);
   document.getElementById('creditCancel').onclick = () => {
     document.getElementById('creditModal').classList.add('hidden');
     creditTreasure = null;
@@ -361,7 +384,7 @@ async function renderTreasures(el) {
   document.getElementById('creditForm').onsubmit = async (e) => {
     e.preventDefault();
     if (!creditTreasure) return;
-    const { total, remain } = calcCredit();
+    const { total, remain, applyCross } = calcCredit();
     const distributions = [...document.querySelectorAll('.credit-amount')].map((inp) => ({
       account: inp.dataset.account,
       amount: Number(inp.value) || 0
@@ -374,9 +397,9 @@ async function renderTreasures(el) {
     try {
       await api('/api/treasures/' + creditTreasure.id + '/credit', {
         method: 'POST',
-        body: JSON.stringify({ totalAmount: total, distributions })
+        body: JSON.stringify({ totalAmount: total, distributions, applyCrossSecretary: applyCross })
       });
-      alert('入帳完成，金額已分配給盟友與公積金');
+      alert('入帳完成，金額已分配給盟友與各項抽成');
       route();
     } catch (err) {
       alert(err.message);
@@ -461,74 +484,106 @@ async function renderTreasures(el) {
 
 async function renderGuildSettings(el) {
   const settings = await api('/api/guild-settings');
-  const history = settings.adjustHistory || [];
-  el.innerHTML = `
-    <h2 class="page-title">公積金設定</h2>
-    <div class="grid-2">
-      <div class="card">
-        <div class="muted">目前公積金餘額</div>
-        <div class="stat-big">${fmtNum(settings.fundBalance)}</div>
-      </div>
-      <div class="card">
-        <div class="card-title">抽成比例設定</div>
-        <form id="guildForm" class="form-grid">
-          <label>公積金抽成 %<input name="fundPercent" type="number" min="0" max="100" step="0.1" value="${settings.fundPercent}" required /></label>
-          <div><button class="btn primary">儲存抽成比例</button></div>
-        </form>
-        <p class="muted" style="margin-top:0.75rem">入帳時會自動從總額抽取此比例存入公積金。</p>
-      </div>
-    </div>
+
+  function renderHistory(history) {
+    if (!history?.length) return '';
+    return `<table class="data-table" style="margin-top:0.75rem">
+      <thead><tr><th>時間</th><th>操作</th><th>金額</th><th>餘額</th><th>備註</th><th>操作者</th></tr></thead>
+      <tbody>${history
+        .slice(0, 20)
+        .map(
+          (h) =>
+            `<tr><td>${fmtDate(h.createdAt)}</td><td>${escapeHtml(h.mode === 'set' ? '設定' : '增減')}</td><td style="color:${h.delta >= 0 ? 'var(--success)' : 'var(--danger)'}">${h.delta >= 0 ? '+' : ''}${fmtNum(h.delta)}</td><td>${fmtNum(h.balanceAfter)}</td><td>${escapeHtml(h.note)}</td><td>${escapeHtml(h.by)}</td></tr>`
+        )
+        .join('')}</tbody>
+    </table>`;
+  }
+
+  function renderFundCard({ title, balance, percentName, percentValue, target, note, history }) {
+    return `
     <div class="card">
-      <div class="card-title">調整公積金餘額</div>
-      <form id="fundAdjustForm" class="form-grid">
+      <div class="card-title">${title}</div>
+      <div class="muted">目前餘額</div>
+      <div class="stat-big" style="margin-bottom:1rem">${fmtNum(balance)}</div>
+      <form class="form-grid fund-percent-form" data-target="${target}">
+        <label>${title}抽成 %<input name="${percentName}" type="number" min="0" max="100" step="0.1" value="${percentValue}" required /></label>
+        <div><button class="btn primary">儲存抽成比例</button></div>
+      </form>
+      <p class="muted" style="margin-top:0.75rem">${note}</p>
+      <div class="card-title" style="margin-top:1.25rem">調整餘額</div>
+      <form class="form-grid fund-adjust-form" data-target="${target}">
         <label>調整方式
           <select name="mode">
             <option value="adjust">增減金額</option>
             <option value="set">直接設定餘額</option>
           </select>
         </label>
-        <label id="fundAmountLabel">增減金額（正數增加、負數減少）<input name="amount" type="number" required placeholder="例如 100 或 -50" /></label>
+        <label class="fund-amount-label">增減金額（正數增加、負數減少）<input name="amount" type="number" required placeholder="例如 100 或 -50" /></label>
         <label>備註<input name="note" placeholder="調整原因" /></label>
         <div><button class="btn primary">確認調整</button></div>
       </form>
-    </div>
-    ${
-      history.length
-        ? `<div class="card" style="padding:0;overflow:auto">
-      <div class="card-title" style="padding:1rem 1rem 0">調整紀錄</div>
-      <table class="data-table">
-        <thead><tr><th>時間</th><th>操作</th><th>金額</th><th>餘額</th><th>備註</th><th>操作者</th></tr></thead>
-        <tbody>${history
-          .slice(0, 30)
-          .map(
-            (h) =>
-              `<tr><td>${fmtDate(h.createdAt)}</td><td>${escapeHtml(h.mode === 'set' ? '設定' : '增減')}</td><td style="color:${h.delta >= 0 ? 'var(--success)' : 'var(--danger)'}">${h.delta >= 0 ? '+' : ''}${fmtNum(h.delta)}</td><td>${fmtNum(h.balanceAfter)}</td><td>${escapeHtml(h.note)}</td><td>${escapeHtml(h.by)}</td></tr>`
-          )
-          .join('')}</tbody>
-      </table>
-    </div>`
-        : ''
-    }`;
-  document.getElementById('guildForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const body = Object.fromEntries(new FormData(e.target));
-    await api('/api/guild-settings', { method: 'PATCH', body: JSON.stringify(body) });
-    alert('公積金抽成已更新');
-    route();
-  };
-  const modeSelect = document.querySelector('#fundAdjustForm select[name=mode]');
-  const amountLabel = document.getElementById('fundAmountLabel');
-  modeSelect.onchange = () => {
-    amountLabel.firstChild.textContent =
-      modeSelect.value === 'set' ? '設定餘額為' : '增減金額（正數增加、負數減少）';
-  };
-  document.getElementById('fundAdjustForm').onsubmit = async (e) => {
-    e.preventDefault();
-    const body = Object.fromEntries(new FormData(e.target));
-    await api('/api/guild-settings/adjust', { method: 'POST', body: JSON.stringify(body) });
-    alert('公積金餘額已調整');
-    route();
-  };
+      ${history?.length ? `<div class="card-title" style="margin-top:1.25rem">調整紀錄</div>${renderHistory(history)}` : ''}
+    </div>`;
+  }
+
+  el.innerHTML = `
+    <h2 class="page-title">抽成設定</h2>
+    <div class="grid-2">
+      ${renderFundCard({
+        title: '公積金',
+        balance: settings.fundBalance,
+        percentName: 'fundPercent',
+        percentValue: settings.fundPercent,
+        target: 'fund',
+        note: '入帳時會自動從總額抽取此比例存入公積金。',
+        history: settings.adjustHistory
+      })}
+      ${renderFundCard({
+        title: '秘書抽成',
+        balance: settings.secretaryBalance ?? 0,
+        percentName: 'secretaryPercent',
+        percentValue: settings.secretaryPercent ?? 0,
+        target: 'secretary',
+        note: '入帳時會自動從總額抽取此比例存入秘書抽成池。',
+        history: settings.secretaryAdjustHistory
+      })}
+      ${renderFundCard({
+        title: '跨服秘書抽成',
+        balance: settings.crossSecretaryBalance ?? 0,
+        percentName: 'crossSecretaryPercent',
+        percentValue: settings.crossSecretaryPercent ?? 0,
+        target: 'crossSecretary',
+        note: '入帳時可勾選是否套用跨服秘書抽成；勾選後依此比例從總額扣除。',
+        history: settings.crossSecretaryAdjustHistory
+      })}
+    </div>`;
+
+  el.querySelectorAll('.fund-percent-form').forEach((form) => {
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(form));
+      await api('/api/guild-settings', { method: 'PATCH', body: JSON.stringify(body) });
+      alert('抽成比例已更新');
+      route();
+    };
+  });
+
+  el.querySelectorAll('.fund-adjust-form').forEach((form) => {
+    const modeSelect = form.querySelector('select[name=mode]');
+    const amountLabel = form.querySelector('.fund-amount-label');
+    modeSelect.onchange = () => {
+      amountLabel.firstChild.textContent =
+        modeSelect.value === 'set' ? '設定餘額為' : '增減金額（正數增加、負數減少）';
+    };
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(form));
+      body.target = form.dataset.target;
+      await api('/api/guild-settings/adjust', { method: 'POST', body: JSON.stringify(body) });
+      alert('餘額已調整');
+      route();
+    };
+  });
 }
 
 async function renderBank(el) {
@@ -653,9 +708,17 @@ async function renderBankOverview(el) {
         <div class="stat-big">${fmtNum(data.guildFundBalance)}</div>
       </div>
       <div class="card">
+        <div class="muted">秘書抽成</div>
+        <div class="stat-big">${fmtNum(data.secretaryBalance ?? 0)}</div>
+      </div>
+      <div class="card">
+        <div class="muted">跨服秘書抽成</div>
+        <div class="stat-big">${fmtNum(data.crossSecretaryBalance ?? 0)}</div>
+      </div>
+      <div class="card">
         <div class="muted">全系統合計</div>
         <div class="stat-big">${fmtNum(data.grandTotal)}</div>
-        <p class="muted">成員 + 公積金${data.depositTotal ? ' + 儲值池 ' + fmtNum(data.depositTotal) : ''}</p>
+        <p class="muted">成員 + 公積金 + 秘書 + 跨服秘書${data.depositTotal ? ' + 儲值池 ' + fmtNum(data.depositTotal) : ''}</p>
       </div>
     </div>
     ${
@@ -928,6 +991,21 @@ async function renderUsers(el) {
           .join('')}</tbody>
       </table>
     </div>
+    ${
+      currentUser.role === 'super_admin'
+        ? `<div class="card" style="margin-top:1rem">
+      <div class="card-title">📦 資料備份／還原</div>
+      <p class="muted">重新部署前請先下載備份。還原會覆蓋目前網站所有資料（成員、寶物、銀行紀錄等）。</p>
+      <div class="toolbar">
+        <button type="button" class="btn" id="downloadBackup">下載備份 JSON</button>
+        <label class="btn" style="cursor:pointer">
+          上傳並還原
+          <input type="file" id="uploadRestore" accept=".json,application/json" hidden />
+        </label>
+      </div>
+    </div>`
+        : ''
+    }
     <div id="userModal" class="modal hidden">
       <div class="modal-panel card">
         <div class="card-title" id="userModalTitle">新增成員</div>
@@ -976,6 +1054,45 @@ async function renderUsers(el) {
 
   document.getElementById('addUser').onclick = () => openUserModal();
   document.getElementById('userCancel').onclick = () => document.getElementById('userModal').classList.add('hidden');
+
+  const downloadBackup = document.getElementById('downloadBackup');
+  if (downloadBackup) {
+    downloadBackup.onclick = async () => {
+      try {
+        const data = await api('/api/admin/backup');
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `lineage-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+  }
+
+  const uploadRestore = document.getElementById('uploadRestore');
+  if (uploadRestore) {
+    uploadRestore.onchange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!confirm('確定還原備份？這會覆蓋目前所有資料。')) {
+        e.target.value = '';
+        return;
+      }
+      try {
+        const text = await file.text();
+        const json = JSON.parse(text);
+        const store = json.store || json;
+        await api('/api/admin/restore', { method: 'POST', body: JSON.stringify({ store }) });
+        alert('資料已還原，請重新整理頁面');
+        location.reload();
+      } catch (err) {
+        alert(err.message || '還原失敗');
+      }
+      e.target.value = '';
+    };
+  }
 
   document.getElementById('userForm').onsubmit = async (e) => {
     e.preventDefault();

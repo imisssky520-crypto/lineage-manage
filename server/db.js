@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
+const PRODUCTION_FILE = path.join(DATA_DIR, 'store.production.json');
 
 const DEFAULT_STORE = {
   groups: [],
@@ -16,7 +17,17 @@ const DEFAULT_STORE = {
   withdrawRequests: [],
   dkpRecords: [],
   dkpSettings: { defaultPoints: 0 },
-  guildSettings: { fundPercent: 10, fundBalance: 0, adjustHistory: [] },
+  guildSettings: {
+    fundPercent: 10,
+    fundBalance: 0,
+    adjustHistory: [],
+    secretaryPercent: 0,
+    secretaryBalance: 0,
+    secretaryAdjustHistory: [],
+    crossSecretaryPercent: 0,
+    crossSecretaryBalance: 0,
+    crossSecretaryAdjustHistory: []
+  },
   depositAccounts: [],
   depositPermissions: [],
   notifications: [],
@@ -38,7 +49,13 @@ export function readStore() {
 
 export function writeStore(store) {
   ensureDataFile();
-  fs.writeFileSync(DATA_FILE, JSON.stringify(store, null, 2), 'utf8');
+  const content = JSON.stringify(store, null, 2);
+  fs.writeFileSync(DATA_FILE, content, 'utf8');
+  try {
+    fs.writeFileSync(PRODUCTION_FILE, content, 'utf8');
+  } catch {
+    /* 唯讀檔案系統時略過 */
+  }
 }
 
 export function updateStore(mutator) {
@@ -67,4 +84,4 @@ export function generateSerial(date = new Date()) {
   return `${prefix}${String(count).padStart(3, '0')}`;
 }
 
-export { DATA_FILE };
+export { DATA_FILE, PRODUCTION_FILE, DEFAULT_STORE };

@@ -1,0 +1,308 @@
+{
+  "groups": [
+    {
+      "id": "g1",
+      "name": "群組1",
+      "server": "極致"
+    }
+  ],
+  "users": [
+    {
+      "id": "u-admin",
+      "account": "極致",
+      "clan": "女妖",
+      "groupId": "g1",
+      "characterClass": "王族",
+      "role": "super_admin",
+      "systemTitle": "會長",
+      "password": "41b253adf6d68f51d1e4a5bf15bf6a63:4186a716f75036193cf3bc67f152687dfc83188672726f9d0cf79c197af9aca7f8e0118369e8de9ae19c985a823d4884cf6c89893d8e68cb52194fb7d8c6dac2",
+      "createdAt": "2026-06-29T23:48:30.658Z"
+    },
+    {
+      "id": "u2",
+      "account": "wrb蠍",
+      "clan": "女妖",
+      "groupId": "g1",
+      "characterClass": "騎士",
+      "role": "member",
+      "systemTitle": "會員",
+      "password": "ecbe66fea2c52b54bf4413f589ce436a:e7a104527e52be07b43313f6a52674cd950cc589bd43d905cf7fcea43e9e274fc546b00b2361f7c54d5e19af0b753de14827dda3d0816f5cc551e101eb4fe3b6",
+      "createdAt": "2026-06-29T23:48:30.704Z"
+    },
+    {
+      "id": "u3",
+      "account": "艾洛卡",
+      "clan": "女妖",
+      "groupId": "g1",
+      "characterClass": "法師",
+      "role": "member",
+      "systemTitle": "會員",
+      "password": "faed1754a4d5c4457f5222b645dfd03f:cd91cc186bb1dd7500b99185307cb05c13c8001c63a520d2568a2f9a26263ce3949b90525f1df3e162892dc5196efc08a676443e3bb9bf2a57463f88eb6df7f1",
+      "createdAt": "2026-06-29T23:48:30.745Z"
+    },
+    {
+      "id": "u4",
+      "account": "頑固老頭",
+      "clan": "女妖",
+      "groupId": "g1",
+      "characterClass": "妖精",
+      "role": "member",
+      "systemTitle": "會員",
+      "password": "110ce8048d03a6f219ef35ceb7aa2405:e03c96e1d3b1ca2249cc16a29937c72f05a3bf08b997a0dcdac8dbe39cbffa4a8bf48491efe72e9c02fa236a6484c96f115115d7b151cfed6725ebaa48909bd9",
+      "createdAt": "2026-06-29T23:48:30.780Z"
+    },
+    {
+      "id": "u5",
+      "account": "進哥他老爸",
+      "clan": "女妖",
+      "groupId": "g1",
+      "characterClass": "法師",
+      "role": "super_admin",
+      "systemTitle": "幹部",
+      "password": "4c1ca5b140cc992df1c24b1c76c66034:26f70a1bdff7e734a32d659caa6627e734bb0b34a82f348769b170bf46b860c755040a4b62e3127f0687ac037c4f529573715080eaf9730bacf1e9a74694d26c",
+      "createdAt": "2026-06-29T23:48:30.816Z"
+    },
+    {
+      "id": "u1782781989039",
+      "account": "蕾蕾",
+      "clan": "女妖",
+      "groupId": "g1",
+      "characterClass": "王族",
+      "role": "super_admin",
+      "systemTitle": "最高管理員",
+      "password": "281e871726a2b89e7edafd96248ee947:892c004a8b1280a855e5708195ee54f24997c9ae0fa05cd0b63ef9e712872caec5d0d8c6b1ae1707f64ac2eb0c2ef3347239c75b6fed2aab9bcb99e297c38710",
+      "createdAt": "2026-06-30T01:13:09.076Z"
+    }
+  ],
+  "announcements": [
+    {
+      "id": "a1",
+      "content": "【公告】領鑽石請至個人銀行申請提領，無須上傳圖片。盟員寶物回購 8 折、一般 7 折。交易請使用鎖定鑽石，注意安全。",
+      "createdAt": "2026-06-29T23:48:30.816Z",
+      "active": true
+    }
+  ],
+  "events": [],
+  "treasures": [
+    {
+      "id": "t1782782348314",
+      "serial": "20260630003",
+      "boss": "BOSS",
+      "obtainedAt": "2026-06-30T09:18",
+      "itemName": "紅布",
+      "holder": "蕾蕾",
+      "participants": [
+        "蕾蕾",
+        "極致"
+      ],
+      "leader": "蕾蕾",
+      "status": "待入帳",
+      "applicant": "蕾蕾",
+      "appliedAt": "2026-06-30T01:19:08.314Z",
+      "createdAt": "2026-06-30T01:19:08.314Z"
+    },
+    {
+      "id": "t1782778859245",
+      "serial": "20260630002",
+      "boss": "TEST",
+      "obtainedAt": "2026-06-30T08:20",
+      "itemName": "紅布",
+      "holder": "極致",
+      "participants": [
+        "極致",
+        "進哥他老爸"
+      ],
+      "leader": "極致",
+      "status": "已入帳",
+      "applicant": "極致",
+      "appliedAt": "2026-06-30T00:20:59.246Z",
+      "createdAt": "2026-06-30T00:20:59.246Z",
+      "creditTotal": 200,
+      "guildFundAmount": 20,
+      "guildFundPercent": 10,
+      "distributions": [
+        {
+          "account": "極致",
+          "amount": 90
+        },
+        {
+          "account": "進哥他老爸",
+          "amount": 90
+        }
+      ],
+      "creditedAt": "2026-06-30T00:21:18.353Z",
+      "creditedBy": "極致"
+    },
+    {
+      "id": "t1782778205795",
+      "serial": "20260630002",
+      "boss": "TEST",
+      "obtainedAt": "2026-06-30T08:10",
+      "itemName": "紅布",
+      "holder": "極致",
+      "participants": [
+        "極致"
+      ],
+      "leader": "極致",
+      "status": "已入帳",
+      "applicant": "極致",
+      "appliedAt": "2026-06-30T00:10:05.795Z",
+      "createdAt": "2026-06-30T00:10:05.795Z",
+      "creditTotal": 100,
+      "guildFundAmount": 10,
+      "guildFundPercent": 10,
+      "distributions": [
+        {
+          "account": "極致",
+          "amount": 90
+        }
+      ],
+      "creditedAt": "2026-06-30T00:19:34.190Z",
+      "creditedBy": "極致"
+    }
+  ],
+  "bankTransactions": [
+    {
+      "id": "b1782786146626",
+      "userId": "u-admin",
+      "type": "調整",
+      "amount": -10,
+      "ref": "管理員調整",
+      "adjustedBy": "極致",
+      "createdAt": "2026-06-30T02:22:26.626Z"
+    },
+    {
+      "id": "b1782785677811",
+      "userId": "u5",
+      "type": "調整",
+      "amount": -90,
+      "ref": "進哥test",
+      "createdAt": "2026-06-30T02:14:37.811Z"
+    },
+    {
+      "id": "b1782781510037",
+      "userId": "u-admin",
+      "type": "提領",
+      "amount": -50,
+      "ref": "提領核准",
+      "withdrawRequestId": "wr1782781486980",
+      "createdAt": "2026-06-30T01:05:10.037Z"
+    },
+    {
+      "id": "b1782781116340",
+      "userId": "u-admin",
+      "type": "提領",
+      "amount": -100,
+      "ref": "提領申請",
+      "createdAt": "2026-06-30T00:58:36.340Z"
+    },
+    {
+      "id": "b1782778878353gwg",
+      "userId": "u5",
+      "type": "寶物收入",
+      "amount": 90,
+      "ref": "#20260630002",
+      "treasureId": "t1782778859245",
+      "createdAt": "2026-06-30T00:21:18.353Z"
+    },
+    {
+      "id": "b1782778878353v8f",
+      "userId": "u-admin",
+      "type": "寶物收入",
+      "amount": 90,
+      "ref": "#20260630002",
+      "treasureId": "t1782778859245",
+      "createdAt": "2026-06-30T00:21:18.353Z"
+    },
+    {
+      "id": "b17827787741900vn",
+      "userId": "u-admin",
+      "type": "寶物收入",
+      "amount": 90,
+      "ref": "#20260630002",
+      "treasureId": "t1782778205795",
+      "createdAt": "2026-06-30T00:19:34.190Z"
+    }
+  ],
+  "withdrawRequests": [
+    {
+      "id": "wr1782781486980",
+      "userId": "u-admin",
+      "account": "極致",
+      "amount": 50,
+      "note": "",
+      "status": "已核准",
+      "createdAt": "2026-06-30T01:04:46.980Z",
+      "reviewedAt": "2026-06-30T01:05:10.037Z",
+      "reviewedBy": "極致"
+    }
+  ],
+  "dkpRecords": [],
+  "dkpSettings": {
+    "defaultPoints": 0,
+    "eventPoints": 10
+  },
+  "guildSettings": {
+    "fundPercent": 20,
+    "fundBalance": 30,
+    "adjustHistory": []
+  },
+  "depositAccounts": [],
+  "depositPermissions": [
+    {
+      "id": "dp1",
+      "userId": "u-admin"
+    },
+    {
+      "id": "dp2",
+      "userId": "u5"
+    }
+  ],
+  "notifications": [],
+  "favoriteLists": [
+    {
+      "id": "f1",
+      "userId": "u-admin",
+      "name": "常用名單 1",
+      "members": [
+        "極致"
+      ]
+    },
+    {
+      "id": "f2",
+      "userId": "u-admin",
+      "name": "常用名單 2",
+      "members": [
+        "極致"
+      ]
+    },
+    {
+      "id": "f3",
+      "userId": "u-admin",
+      "name": "常用名單 3",
+      "members": []
+    }
+  ],
+  "sessions": {
+    "fa2c9c2d1d7e15c0f38fe6ffdf24e98b5a156d1ed40408a13888a8e77b08401b": {
+      "userId": "u1782781989039",
+      "createdAt": "2026-06-30T01:43:51.654Z",
+      "expiresAt": "2026-07-07T01:43:51.654Z"
+    },
+    "d5e644752d681d1a25a6300afe70e2436b136143ff9f6fc0b5f4f9a440037e36": {
+      "userId": "u-admin",
+      "createdAt": "2026-06-30T01:50:57.947Z",
+      "expiresAt": "2026-07-07T01:50:57.947Z"
+    },
+    "6d2084f866f48fde49a197aa7e49aeb2da8cd29cfc3e5c683ec3551347ee3441": {
+      "userId": "u-admin",
+      "createdAt": "2026-06-30T02:05:28.608Z",
+      "expiresAt": "2026-07-07T02:05:28.608Z"
+    },
+    "bf3356eeecf1c984fff9ac39e5ab88ea4ecc0bc1f26dc44980b437bb2219f2d7": {
+      "userId": "u-admin",
+      "createdAt": "2026-06-30T02:20:00.170Z",
+      "expiresAt": "2026-07-07T02:20:00.171Z"
+    }
+  }
+}

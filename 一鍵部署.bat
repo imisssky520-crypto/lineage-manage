@@ -27,7 +27,28 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo [1/4] 檢查 GitHub 登入狀態...
+echo.
+echo [1/5] 備份雲端資料並準備部署快照...
+set BACKUP_OK=0
+if exist backup-config.json (
+  powershell -ExecutionPolicy Bypass -File "%~dp0backup-cloud.ps1" -Quiet
+  if not errorlevel 1 set BACKUP_OK=1
+)
+if "%BACKUP_OK%"=="0" (
+  if exist server\data\store.json (
+    copy /Y server\data\store.json server\data\store.production.json >nul
+    echo       已使用本機 store.json 作為部署資料快照
+    set BACKUP_OK=1
+  ) else (
+    echo       [注意] 無法備份雲端且本機無資料，部署後可能使用空白初始資料
+    echo       建議先設定 backup-config.json 並執行「備份雲端資料.bat」
+  )
+) else (
+  echo       雲端資料已同步到 store.production.json
+)
+
+echo.
+echo [2/5] 檢查 GitHub 登入狀態...
 gh auth status >nul 2>&1
 if errorlevel 1 (
   echo.
@@ -42,7 +63,7 @@ if errorlevel 1 (
 echo       GitHub 已登入 OK
 
 echo.
-echo [2/4] 上傳程式到 GitHub...
+echo [3/5] 上傳程式到 GitHub...
 if not exist .git git init -b main >nul 2>&1
 
 echo       設定本機 Git 身分（僅此專案）...
@@ -52,6 +73,7 @@ git config user.name "%GH_USER%"
 git config user.email "%GH_USER%@users.noreply.github.com"
 
 git add -A
+git add -f server\data\store.production.json 2>nul
 git diff --cached --quiet
 if not errorlevel 1 (
   echo       沒有新變更，略過 commit
@@ -104,19 +126,15 @@ for /f "delims=" %%i in ('git remote get-url origin') do set REPO_URL=%%i
 echo       已上傳：%REPO_URL%
 
 echo.
-echo [3/4] 開啟 Render 部署頁面...
+echo [4/5] Render 將自動重新部署（約 3~5 分鐘）...
 echo.
-echo 接下來請在瀏覽器操作（只需做一次）：
-echo   1. 用 GitHub 登入 Render
-echo   2. 點 New + ^> Blueprint
-echo   3. 選 lineage-manage 倉庫
-echo   4. 點 Apply 開始部署
-echo   5. 等 3~5 分鐘，複製網址（結尾加 /login.html）
+echo 資料快照 store.production.json 已隨程式上傳，
+echo 部署完成後會自動還原，無需手動執行還原腳本。
 echo.
-start https://dashboard.render.com/blueprint/new
+start https://dashboard.render.com/
 
 echo.
-echo [4/4] 完成！
+echo [5/5] 完成！
 echo.
 echo 部署成功後網址類似：
 echo   https://lineage-manage-xxxx.onrender.com/login.html
