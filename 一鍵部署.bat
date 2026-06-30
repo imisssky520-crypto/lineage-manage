@@ -1,0 +1,111 @@
+@echo off
+chcp 65001 >nul
+title 天堂M血盟管理 - 一鍵部署到 Render
+cd /d "%~dp0"
+
+echo.
+echo ========================================
+echo   天堂M血盟管理系統 - 一鍵部署
+echo ========================================
+echo.
+
+where git >nul 2>&1
+if errorlevel 1 (
+  echo [錯誤] 未安裝 Git
+  echo 請先安裝：https://git-scm.com/download/win
+  echo 安裝後重新雙擊此檔案
+  pause
+  exit /b 1
+)
+
+where gh >nul 2>&1
+if errorlevel 1 (
+  echo [錯誤] 未安裝 GitHub CLI
+  echo 請先安裝：https://cli.github.com/
+  echo 安裝後重新雙檔此檔案
+  pause
+  exit /b 1
+)
+
+echo [1/4] 檢查 GitHub 登入狀態...
+gh auth status >nul 2>&1
+if errorlevel 1 (
+  echo.
+  echo 請在跳出的視窗登入 GitHub（只需做一次）
+  gh auth login -w -p https
+  if errorlevel 1 (
+    echo [錯誤] GitHub 登入失敗
+    pause
+    exit /b 1
+  )
+)
+echo       GitHub 已登入 OK
+
+echo.
+echo [2/4] 上傳程式到 GitHub...
+if not exist .git git init -b main >nul 2>&1
+
+echo       設定本機 Git 身分（僅此專案）...
+for /f "delims=" %%i in ('gh api user -q .login 2^>nul') do set GH_USER=%%i
+if not defined GH_USER set GH_USER=WEI
+git config user.name "%GH_USER%"
+git config user.email "%GH_USER%@users.noreply.github.com"
+
+git add .
+git diff --cached --quiet
+if not errorlevel 1 (
+  echo       沒有新變更，略過 commit
+) else (
+  git commit -m "Deploy to Render"
+  if errorlevel 1 (
+    echo [錯誤] 建立 commit 失敗
+    pause
+    exit /b 1
+  )
+)
+
+git rev-parse HEAD >nul 2>&1
+if errorlevel 1 (
+  echo [錯誤] 沒有任何 commit，請確認專案檔案存在
+  pause
+  exit /b 1
+)
+
+git remote get-url origin >nul 2>&1
+if errorlevel 1 (
+  echo       建立私人倉庫 lineage-manage ...
+  gh repo create lineage-manage --private --source=. --remote=origin --push
+) else (
+  git push -u origin main
+)
+if errorlevel 1 (
+  echo [錯誤] 上傳 GitHub 失敗，請檢查網路或 gh auth login
+  pause
+  exit /b 1
+)
+
+for /f "delims=" %%i in ('git remote get-url origin') do set REPO_URL=%%i
+echo       已上傳：%REPO_URL%
+
+echo.
+echo [3/4] 開啟 Render 部署頁面...
+echo.
+echo 接下來請在瀏覽器操作（只需做一次）：
+echo   1. 用 GitHub 登入 Render
+echo   2. 點 New + ^> Blueprint
+echo   3. 選 lineage-manage 倉庫
+echo   4. 點 Apply 開始部署
+echo   5. 等 3~5 分鐘，複製網址（結尾加 /login.html）
+echo.
+start https://dashboard.render.com/blueprint/new
+
+echo.
+echo [4/4] 完成！
+echo.
+echo 部署成功後網址類似：
+echo   https://lineage-manage-xxxx.onrender.com/login.html
+echo.
+echo 預設管理員：帳號 極致  密碼 love0227
+echo 上線後請立刻修改密碼！
+echo.
+pause

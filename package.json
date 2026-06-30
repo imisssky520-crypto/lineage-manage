@@ -1,0 +1,15 @@
+{
+  "name": "lineage-manage",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server/index.js",
+    "start": "node server/index.js",
+    "seed": "node server/seed.js",
+    "clear-history": "node server/clear-history.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

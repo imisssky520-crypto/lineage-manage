@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <title>LineageManage - 登入</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body class="login-page">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="logo">🛡️</div>
+      <h1>LineageManage</h1>
+      <p>天堂M 血盟管理系統</p>
+    </div>
+    <form id="loginForm" class="login-form">
+      <label>帳號<input name="account" required placeholder="請輸入帳號" autocomplete="username" /></label>
+      <label>密碼<input name="password" type="password" required placeholder="請輸入密碼" autocomplete="current-password" /></label>
+      <label class="login-remember">
+        <input type="checkbox" name="remember" id="remember" />
+        記住登入資訊（下次自動填入）
+      </label>
+      <button type="submit" class="btn primary full">登入</button>
+      <p id="loginError" class="error hidden"></p>
+    </form>
+  </div>
+  <script type="module">
+    const STORAGE_KEY = 'lineageManageLogin';
+    const form = document.getElementById('loginForm');
+    const err = document.getElementById('loginError');
+    const remember = document.getElementById('remember');
+
+    function loadSavedLogin() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        if (!saved) return;
+        if (saved.account) form.account.value = saved.account;
+        if (saved.password) form.password.value = saved.password;
+        remember.checked = true;
+      } catch { /* ignore */ }
+    }
+
+    function saveLogin(data) {
+      if (remember.checked) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({
+          account: data.account,
+          password: data.password
+        }));
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+
+    loadSavedLogin();
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.classList.add('hidden');
+      const data = Object.fromEntries(new FormData(form));
+      delete data.remember;
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        err.textContent = json.error || '登入失敗';
+        err.classList.remove('hidden');
+        return;
+      }
+      saveLogin(data);
+      localStorage.setItem('token', json.token);
+      location.href = '/index.html';
+    });
+  </script>
+</body>
+</html>
