@@ -73,13 +73,29 @@ if errorlevel 1 (
 
 git remote get-url origin >nul 2>&1
 if errorlevel 1 (
-  echo       建立私人倉庫 lineage-manage ...
-  gh repo create lineage-manage --private --source=. --remote=origin --push
-) else (
-  git push -u origin main
+  gh repo view lineage-manage >nul 2>&1
+  if not errorlevel 1 (
+    echo       倉庫已存在，連接遠端並推送...
+    git remote add origin https://github.com/%GH_USER%/lineage-manage.git
+  ) else (
+    echo       建立私人倉庫 lineage-manage ...
+    gh repo create lineage-manage --private --source=. --remote=origin
+    if errorlevel 1 (
+      echo [錯誤] 建立倉庫失敗
+      pause
+      exit /b 1
+    )
+  )
+)
+
+echo       推送到 GitHub...
+git push -u origin main
+if errorlevel 1 (
+  echo       一般推送失敗，嘗試覆蓋遠端...
+  git push -u origin main --force
 )
 if errorlevel 1 (
-  echo [錯誤] 上傳 GitHub 失敗，請檢查網路或 gh auth login
+  echo [錯誤] 上傳 GitHub 失敗
   pause
   exit /b 1
 )

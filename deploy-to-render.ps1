@@ -17,7 +17,6 @@ if (-not (Test-Path .git)) {
   git branch -M main
 }
 
-# 僅設定此專案的本機 Git 身分（不修改全域設定）
 $ghUser = (gh api user -q .login 2>$null)
 if (-not $ghUser) { $ghUser = 'WEI' }
 git config user.name $ghUser
@@ -26,23 +25,38 @@ git config user.email "$ghUser@users.noreply.github.com"
 git add .
 git status --short
 
-$msg = "Prepare Render deployment"
-$existing = git log -1 --format=%s 2>$null
-if ($LASTEXITCODE -ne 0) {
+$msg = 'Deploy to Render'
+$hasHead = git rev-parse HEAD 2>$null
+if (-not $hasHead) {
   git commit -m $msg
-} else {
-  $dirty = git status --porcelain
-  if ($dirty) { git commit -m $msg }
+} elseif (git status --porcelain) {
+  git commit -m $msg
+}
+
+if (-not (git rev-parse HEAD 2>$null)) {
+  Write-Error '沒有任何 commit'
 }
 
 $remote = git remote get-url origin 2>$null
-if ($LASTEXITCODE -ne 0) {
-  Write-Host "`n建立 GitHub 私人倉庫 lineage-manage ..."
-  gh repo create lineage-manage --private --source=. --remote=origin --push
-} else {
-  Write-Host "`n推送到 GitHub ..."
-  git push -u origin main
+if (-not $remote) {
+  $repoExists = gh repo view lineage-manage 2>$null
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host '倉庫已存在，連接遠端並推送...'
+    git remote add origin "https://github.com/$ghUser/lineage-manage.git"
+  } else {
+    Write-Host '建立 GitHub 私人倉庫 lineage-manage ...'
+    gh repo create lineage-manage --private --source=. --remote=origin
+    if ($LASTEXITCODE -ne 0) { throw '建立倉庫失敗' }
+  }
 }
+
+Write-Host '推送到 GitHub ...'
+git push -u origin main
+if ($LASTEXITCODE -ne 0) {
+  Write-Host '一般推送失敗，嘗試覆蓋遠端...'
+  git push -u origin main --force
+}
+if ($LASTEXITCODE -ne 0) { throw '推送失敗' }
 
 Write-Host @"
 
