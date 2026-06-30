@@ -51,7 +51,7 @@ if not defined GH_USER set GH_USER=WEI
 git config user.name "%GH_USER%"
 git config user.email "%GH_USER%@users.noreply.github.com"
 
-git add .
+git add -A
 git diff --cached --quiet
 if not errorlevel 1 (
   echo       沒有新變更，略過 commit

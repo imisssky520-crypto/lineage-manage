@@ -16,8 +16,8 @@ import {
 } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.join(__dirname, '..');
-const PUBLIC = path.join(ROOT, 'public');
+const ROOT = path.resolve(path.join(__dirname, '..'));
+const PUBLIC = path.resolve(path.join(ROOT, 'public'));
 const PORT = process.env.PORT || 3000;
 
 const MIME = {
@@ -153,10 +153,19 @@ function requirePerm(req, res, permission) {
 
 function serveStatic(req, res) {
   let urlPath = req.url.split('?')[0];
-  if (urlPath === '/') urlPath = '/login.html';
-  if (urlPath === '/login') urlPath = '/login.html';
-  const filePath = path.join(PUBLIC, urlPath.replace(/^\/+/, ''));
-  if (!filePath.startsWith(PUBLIC)) {
+
+  if (urlPath === '/' || urlPath === '') {
+    res.writeHead(302, { Location: '/login.html' });
+    return res.end();
+  }
+  if (urlPath === '/login') {
+    res.writeHead(302, { Location: '/login.html' });
+    return res.end();
+  }
+
+  const relative = urlPath.replace(/^\/+/, '');
+  const filePath = path.resolve(PUBLIC, relative);
+  if (filePath !== PUBLIC && !filePath.startsWith(PUBLIC + path.sep)) {
     sendJson(res, 403, { error: 'Forbidden' });
     return;
   }
@@ -381,25 +390,90 @@ async function handleApi(req, res) {
     return sendJson(res, 200, updated);
   }
 
-  if (pathname.startsWith('/api/treasures/') && method === 'PATCH') {
+  if (pathname.match(/^\/api\/treasures\/[^/]+$/) && method === 'PATCH') {
     const user = requireAuth(req, res);
     if (!user) return;
-    const id = pathname.split('/').pop();
+    const id = pathname.split('/')[3];
     const body = await parseBody(req);
-    const allowed = ['boss', 'itemName', 'holder', 'participants', 'leader', 'obtainedAt', 'status'];
-    const patch = {};
-    allowed.forEach((k) => {
-      if (body[k] !== undefined) patch[k] = body[k];
-    });
     let updated;
+    let patchError = null;
+
     updateStore((store) => {
       const idx = store.treasures.findIndex((t) => t.id === id);
-      if (idx >= 0) {
-        store.treasures[idx] = { ...store.treasures[idx], ...patch };
-        updated = store.treasures[idx];
+      if (idx < 0) {
+        patchError = '找不到寶物';
+        return;
       }
+      const t = store.treasures[idx];
+      if (t.status !== '待入帳') {
+        patchError = '已入帳後不可修改';
+        return;
+      }
+
+      const canManage = hasPermission(user, 'treasures.manage');
+      const canEdit =
+        canManage ||
+        t.holder === user.account ||
+        t.applicant === user.account ||
+        t.leader === user.account;
+      if (!canEdit) {
+        patchError = '無權限修改此寶物';
+        return;
+      }
+
+      const patch = {};
+      if (body.participants !== undefined) {
+        const participants = Array.isArray(body.participants)
+          ? body.participants.map((s) => String(s).trim()).filter(Boolean)
+          : String(body.participants)
+              .split(/[,，]/)
+              .map((s) => s.trim())
+              .filter(Boolean);
+        if (!participants.length) {
+          patchError = '至少需要一位參與人員';
+          return;
+        }
+        patch.participants = participants;
+      }
+
+      if (canManage) {
+        ['boss', 'itemName', 'holder', 'leader', 'obtainedAt'].forEach((k) => {
+          if (body[k] !== undefined) patch[k] = body[k];
+        });
+      }
+
+      if (!Object.keys(patch).length) {
+        patchError = '沒有可更新的欄位';
+        return;
+      }
+
+      store.treasures[idx] = { ...t, ...patch };
+      updated = store.treasures[idx];
     });
+
+    if (patchError) return sendJson(res, 400, { error: patchError });
     return sendJson(res, 200, updated || {});
+  }
+
+  if (pathname.match(/^\/api\/treasures\/[^/]+$/) && method === 'DELETE') {
+    const user = requirePerm(req, res, 'treasures.manage');
+    if (!user) return;
+    const id = pathname.split('/')[3];
+    let deleteError = null;
+    updateStore((store) => {
+      const t = store.treasures.find((x) => x.id === id);
+      if (!t) {
+        deleteError = '找不到寶物';
+        return;
+      }
+      if (t.status !== '待入帳') {
+        deleteError = '僅待入帳的寶物可刪除';
+        return;
+      }
+      store.treasures = store.treasures.filter((x) => x.id !== id);
+    });
+    if (deleteError) return sendJson(res, 400, { error: deleteError });
+    return sendJson(res, 200, { ok: true });
   }
 
   // Guild settings
@@ -968,6 +1042,14 @@ const server = http.createServer(async (req, res) => {
 
 // Auto seed if no data
 const dataFile = path.join(__dirname, 'data', 'store.json');
+if (!fs.existsSync(PUBLIC)) {
+  console.error('❌ 找不到 public 目錄：', PUBLIC);
+  process.exit(1);
+}
+if (!fs.existsSync(path.join(PUBLIC, 'login.html'))) {
+  console.error('❌ 找不到 login.html，請確認 public 資料夾已上傳');
+  process.exit(1);
+}
 if (!fs.existsSync(dataFile)) {
   await import('./seed.js');
 }

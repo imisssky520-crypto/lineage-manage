@@ -154,6 +154,12 @@ async function renderTreasures(el) {
     api('/api/guild-settings')
   ]);
 
+  function canEditParticipants(t) {
+    if (t.status !== '待入帳') return false;
+    if (isAdmin()) return true;
+    return [t.holder, t.applicant, t.leader].includes(currentUser.account);
+  }
+
   el.innerHTML = `
     <h2 class="page-title">寶物申報清單</h2>
     <div class="toolbar">
@@ -176,7 +182,9 @@ async function renderTreasures(el) {
               <td>${t.creditTotal ? fmtNum(t.creditTotal) : '-'}</td>
               <td>${fmtDate(t.appliedAt)}</td>
               <td>
-                ${t.status === '待入帳' && isAdmin() ? `<button class="btn primary btn-sm" data-credit="${t.id}">入帳</button>` : ''}
+                ${t.status === '待入帳' && canEditParticipants(t) ? `<button class="btn btn-sm" data-edit-participants="${t.id}">編輯參與</button> ` : ''}
+                ${t.status === '待入帳' && isAdmin() ? `<button class="btn primary btn-sm" data-credit="${t.id}">入帳</button> ` : ''}
+                ${t.status === '待入帳' && isAdmin() ? `<button class="btn danger btn-sm" data-del-treasure="${t.id}">刪除</button> ` : ''}
                 ${t.status === '已入帳' ? `<button class="btn btn-sm" data-detail="${t.id}">明細</button>` : ''}
               </td>
             </tr>`
@@ -226,6 +234,22 @@ async function renderTreasures(el) {
         <div class="toolbar" style="margin-top:1rem">
           <button type="button" class="btn primary" id="detailClose">關閉</button>
         </div>
+      </div>
+    </div>
+    <div id="editParticipantsModal" class="modal hidden">
+      <div class="modal-panel card">
+        <div class="card-title">編輯參與人員</div>
+        <p id="editParticipantsInfo" class="muted"></p>
+        <form id="editParticipantsForm">
+          <label class="field-label">參與人員
+            <input name="participants" type="text" required placeholder="逗號分隔，例如：極致, 蕾蕾" />
+          </label>
+          <p class="muted" style="font-size:0.8rem;margin-top:0.35rem">僅「待入帳」狀態可修改，入帳後將鎖定。</p>
+          <div class="toolbar" style="margin-top:1rem">
+            <button type="button" class="btn ghost" id="editParticipantsCancel">取消</button>
+            <button type="submit" class="btn primary">儲存</button>
+          </div>
+        </form>
       </div>
     </div>`;
 
@@ -371,11 +395,68 @@ async function renderTreasures(el) {
   el.querySelectorAll('[data-credit]').forEach((btn) => {
     btn.onclick = () => openCreditModal(treasureMap[btn.dataset.credit]);
   });
+  el.querySelectorAll('[data-edit-participants]').forEach((btn) => {
+    btn.onclick = () => openEditParticipantsModal(treasureMap[btn.dataset.editParticipants]);
+  });
+  el.querySelectorAll('[data-del-treasure]').forEach((btn) => {
+    btn.onclick = async () => {
+      const t = treasureMap[btn.dataset.delTreasure];
+      if (!t) return;
+      if (!confirm(`確定刪除寶物申報「${t.serial} · ${t.itemName}」？`)) return;
+      try {
+        await api('/api/treasures/' + t.id, { method: 'DELETE' });
+        route();
+      } catch (err) {
+        alert(err.message);
+      }
+    };
+  });
   el.querySelectorAll('[data-detail]').forEach((btn) => {
     btn.onclick = () => openDetailModal(treasureMap[btn.dataset.detail]);
   });
   document.getElementById('detailClose').onclick = () =>
     document.getElementById('detailModal').classList.add('hidden');
+
+  let editParticipantsTreasure = null;
+
+  function openEditParticipantsModal(t) {
+    editParticipantsTreasure = t;
+    document.getElementById('editParticipantsInfo').textContent =
+      `${t.serial} · ${t.itemName} · 持有人：${t.holder}`;
+    const form = document.getElementById('editParticipantsForm');
+    form.participants.value = (t.participants || []).join(', ');
+    document.getElementById('editParticipantsModal').classList.remove('hidden');
+  }
+
+  document.getElementById('editParticipantsCancel').onclick = () => {
+    document.getElementById('editParticipantsModal').classList.add('hidden');
+    editParticipantsTreasure = null;
+  };
+
+  document.getElementById('editParticipantsForm').onsubmit = async (e) => {
+    e.preventDefault();
+    if (!editParticipantsTreasure) return;
+    const fd = new FormData(e.target);
+    const participants = String(fd.get('participants') || '')
+      .split(/[,，]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!participants.length) {
+      alert('至少需要一位參與人員');
+      return;
+    }
+    try {
+      await api('/api/treasures/' + editParticipantsTreasure.id, {
+        method: 'PATCH',
+        body: JSON.stringify({ participants })
+      });
+      document.getElementById('editParticipantsModal').classList.add('hidden');
+      editParticipantsTreasure = null;
+      route();
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 }
 
 async function renderGuildSettings(el) {
